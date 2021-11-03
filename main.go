@@ -38,22 +38,20 @@ func main() {
 	//TODO: JAK FUNGUJE CONTEXT? Pokud není CTX jako argument funkce funkce neproběhne
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	listOptions := metav1.ListOptions{
-		LabelSelector: label,
-	}
+
 	EvtOptions := metav1.ListOptions{
-		FieldSelector: "involvedObject.name=hello-node-7567d9fdc9-dh58b",
-		TypeMeta:      metav1.TypeMeta{Kind: "Pod"},
+
+		TypeMeta: metav1.TypeMeta{Kind: "Pod"},
 	}
 	events, _ := api.Events("default").List(ctx, EvtOptions)
 	for _, item := range events.Items {
 		fmt.Println(item)
 	}
 	//TODO: : Proč je tu ctx a k čemu slouží
-	pods, err := api.Pods("default").List(ctx, listOptions)
-	for _, PodList := range (*pods).Items {
-		fmt.Printf("pods-name=%v\n", PodList.Name)
+	//pods, err := api.Pods("default").List(ctx, listOptions)
+	//for _, PodList := range (*pods).Items {
+	//fmt.Printf("pods-name=%v\n", PodList.Name)
 
-	}
+	//}
 
 }
