@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+	//TODO: Jak na flagy? -> nefungují ani po kompilaci ani při go run main.go
 	var ns, label, field string
 	flag.StringVar(&ns, "namespace", "", "namespace")
 	flag.StringVar(&label, "l", "", "Label selector")
@@ -39,13 +40,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	//TODO: Prostudovat více listOptions a zjistit jaké má možnosti filtrování
 	EvtOptions := metav1.ListOptions{
-
 		TypeMeta: metav1.TypeMeta{Kind: "Pod"},
 	}
-	events, _ := api.Events("default").List(ctx, EvtOptions)
+	events, _ := api.Events(ns).List(ctx, EvtOptions)
 	for _, item := range events.Items {
-		fmt.Println(item)
+		fmt.Println(item.Name, "LAST SEEN - ", item.LastTimestamp, "MESSAGE - ", item.Message, "REASON ")
 	}
 	//TODO: : Proč je tu ctx a k čemu slouží
 	//pods, err := api.Pods("default").List(ctx, listOptions)
