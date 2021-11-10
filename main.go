@@ -2,21 +2,38 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
+	"github.com/go-redis/redis"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+type Output struct {
+	Name    string `json:"name"`
+	Time    string `json:"time"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
+}
+
 func main() {
 	//TODO: Jak na flagy? -> nefungují ani po kompilaci ani při go run main.go
+
+	//REDIS CONNECTION
+	client := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
 	var ns, label, field string
 	flag.StringVar(&ns, "namespace", "", "namespace")
 	flag.StringVar(&label, "l", "", "Label selector")
@@ -36,45 +53,36 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//api := clientset.CoreV1()
+	// K8s api
+	api := clientset.CoreV1()
+
+	//REDIS_TEST_CONNECTION
+	pong, err := client.Ping().Result()
+	fmt.Println(pong, err)
 
 	//TODO: JAK FUNGUJE CONTEXT? Pokud není CTX jako argument funkce funkce neproběhne
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	//TODO: Prostudovat více listOptions a zjistit jaké má možnosti filtrování
-	/* 	EvtOptions := metav1.ListOptions{
-		TypeMeta: metav1.TypeMeta{Kind: "Pod"},
-	} */
-	/* events, _ := api.Events(ns).List(ctx, EvtOptions)
-	for _, item := range events.Items {
-		fmt.Println(item.Name, "LAST SEEN - ", item.LastTimestamp, "MESSAGE - ", item.Message, "REASON - ", item.Reason)
-	} */
-
-	//Funkční watcher na events
-	restClient := clientset.CoreV1().RESTClient()
-	lw := cache.NewListWatchFromClient(restClient, "events", v1.NamespaceAll, fields.Everything())
-	_, controller := cache.NewInformer(lw,
-		&v1.Event{},
-		time.Millisecond*1,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				event, ok := obj.(*v1.Event)
-				if !ok {
-					log.Fatalf("list/watch returned non-event object: %T", event)
+	watcher, err := api.Events(v1.NamespaceAll).Watch(ctx, metav1.ListOptions{})
+	for event := range watcher.ResultChan() {
+		svc := event.Object.(*v1.Event)
+		switch event.Type {
+		case watch.Added:
+			if svc.Reason == "ScalingReplicaSet" {
+				bytes, err := json.Marshal(Output{
+					Name:    svc.Name,
+					Time:    svc.EventTime.Format("2 Jan 2006 15:04:05"),
+					Reason:  svc.Reason,
+					Message: svc.Message,
+				})
+				if err != nil {
+					panic(err)
 				}
-				time.Sleep(time.Millisecond * 1)
-				log.Printf("Name:", event.Name, "What happend %s", event.Message, "KIND:", event.Kind)
-			},
-		},
-	)
-	controller.Run(ctx.Done())
-
-	//TODO: : Proč je tu ctx a k čemu slouží
-	//pods, err := api.Pods("default").List(ctx, listOptions)
-	//for _, PodList := range (*pods).Items {
-	//fmt.Printf("pods-name=%v\n", PodList.Name)
-
-	//}
-
+				err = client.Set(string(svc.UID), bytes, 0).Err()
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+		}
+	}
 }
