@@ -1,0 +1,42 @@
+/* 	EvtOptions := metav1.ListOptions{
+		TypeMeta: metav1.TypeMeta{Kind: "Pod"},
+	} */
+	/* events, _ := api.Events(ns).List(ctx, EvtOptions)
+	for _, item := range events.Items {
+		fmt.Println(item.Name, "LAST SEEN - ", item.LastTimestamp, "MESSAGE - ", item.Message, "REASON - ", item.Reason)
+	} */
+
+	//restClient := clientset.CoreV1().RESTClient()
+	//queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	//lw := cache.NewListWatchFromClient(restClient, "events", v1.NamespaceAll, fields.Everything())
+    	/* 	//Funkční watcher na events
+	   	_, controller := cache.NewInformer(lw,
+	   		&v1.Event{},
+	   		time.Millisecond*1,
+	   		cache.ResourceEventHandlerFuncs{
+	   			AddFunc: func(obj interface{}) {
+	   				event, ok := obj.(*v1.Event)
+	   				if !ok {
+	   					log.Fatalf("list/watch returned non-event object: %T", event)
+	   				}
+	   				time.Sleep(time.Millisecond * 1)
+
+	   				//log.Printf("Name:", event.Name, "What happend %s", event.Message, "KIND:", event.Reason)
+	   				if event.GetCreationTimestamp() != event.LastTimestamp {
+	   					if event.Reason == "ScalingReplicaSet" {
+
+	   						//log.Printf("OBSERVED", event.DeepCopy().LastTimestamp)
+	   					}
+	   				}
+
+	   				if event.Reason == "ScalingReplicaSet" {
+
+	   					log.Printf("OBSERVED", event.DeepCopy().LastTimestamp)
+	   				}
+	   				//fmt.Println("CREATED", event.GetCreationTimestamp())
+	   				//fmt.Println("CHANGED", event.LastTimestamp, event.Reason)
+	   				//log.Printf("SCALED!!", event.DeepCopy().Reason)
+	   			},
+	   		},
+	   	)
+	   	controller.Run(ctx.Done()) */

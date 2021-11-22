@@ -24,27 +24,10 @@ type Output struct {
 	Message string `json:"message"`
 }
 
-func main() {
-	//TODO: Jak na flagy? -> nefungují ani po kompilaci ani při go run main.go
-
-	//REDIS CONNECTION
-	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
-	})
-
-	var ns, label, field string
-	flag.StringVar(&ns, "namespace", "", "namespace")
-	flag.StringVar(&label, "l", "", "Label selector")
-	flag.StringVar(&field, "f", "", "Field selector")
-
-	// Popis cesty k kube configu - HOME/.kube/config
-	// Filepath join -> vytvoří cestu ze zadaných stringů
+func connK8s() *kubernetes.Clientset {
 	kubeconfig := filepath.Join(
 		os.Getenv("HOME"), ".kube", "config",
 	)
-	// Vytvoření klienta z configu ->  .kube/config
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		log.Fatal(err)
@@ -53,17 +36,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// K8s api
+	return clientset
+}
+
+func GetEventsNSA(clientset *kubernetes.Clientset, client *redis.Client, ctx context.Context) {
+
 	api := clientset.CoreV1()
-
-	//REDIS_TEST_CONNECTION
-	pong, err := client.Ping().Result()
-	fmt.Println(pong, err)
-
-	//TODO: JAK FUNGUJE CONTEXT? Pokud není CTX jako argument funkce funkce neproběhne
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	watcher, err := api.Events(v1.NamespaceAll).Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
 	for event := range watcher.ResultChan() {
 		svc := event.Object.(*v1.Event)
 		switch event.Type {
@@ -85,4 +69,29 @@ func main() {
 			}
 		}
 	}
+}
+
+func main() {
+	//TODO: Jak na flagy? -> nefungují ani po kompilaci ani při go run main.go
+
+	//REDIS CONNECTION
+	client := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	//Redis test connection
+	pong, err := client.Ping().Result()
+	fmt.Println(pong, err)
+
+	var ns string
+	flag.StringVar(&ns, "namespace", "", "namespace")
+	flag.Parse()
+
+	// Popis cesty k kube configu - HOME/.kube/config
+	// Filepath join -> vytvoří cestu ze zadaných stringů
+	ctx := context.Background()
+	clientset := connK8s()
+	GetEventsNSA(clientset, client, ctx)
 }
