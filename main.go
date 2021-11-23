@@ -52,7 +52,7 @@ func GetEventsNSA(clientset *kubernetes.Clientset, client *redis.Client, ctx con
 		svc := event.Object.(*v1.Event)
 		switch event.Type {
 		case watch.Added:
-			if svc.Reason == "ScalingReplicaSet" {
+			if svc.Reason == "Scheduled" {
 				bytes, err := json.Marshal(Output{
 					Name:    svc.Name,
 					Time:    svc.EventTime.Format("2 Jan 2006 15:04:05"),
@@ -66,9 +66,43 @@ func GetEventsNSA(clientset *kubernetes.Clientset, client *redis.Client, ctx con
 				if err != nil {
 					fmt.Println(err)
 				}
+				fmt.Println(svc.Name, svc.Reason, svc.InvolvedObject.ResourceVersion)
 			}
 		}
 	}
+
+}
+
+func PodEvents(clientset *kubernetes.Clientset) {
+	api := clientset.CoreV1()
+	papi := clientset.AppsV1()
+	pods, err := api.Pods("").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+	for _, pod := range pods.Items {
+		if len(pod.OwnerReferences) == 0 {
+			fmt.Printf("NO OWNER", pod.Name)
+			continue
+		}
+		var ownerName, ownerKind string
+		switch pod.OwnerReferences[0].Kind {
+		case "ReplicaSet":
+			replica, repErr := papi.ReplicaSets(pod.Namespace).Get(context.TODO(), pod.OwnerReferences[0].Name, metav1.GetOptions{})
+			if repErr != nil {
+				panic(repErr.Error())
+			}
+			ownerName = replica.OwnerReferences[0].Name
+			ownerKind = "Deployment"
+		case "DaemonSet", "StatefulSet":
+			ownerName = pod.OwnerReferences[0].Name
+			ownerKind = pod.OwnerReferences[0].Kind
+		default:
+			continue
+		}
+		fmt.Printf("POD %s is managed by %s %s\n", pod.Name, ownerName, ownerKind)
+	}
+
 }
 
 func main() {
@@ -93,5 +127,7 @@ func main() {
 	// Filepath join -> vytvoří cestu ze zadaných stringů
 	ctx := context.Background()
 	clientset := connK8s()
+	PodEvents(clientset)
 	GetEventsNSA(clientset, client, ctx)
+
 }
