@@ -106,6 +106,8 @@ func PodEvents(clientset *kubernetes.Clientset) {
 }
 
 func main() {
+	// uncomment to use alternative implementation
+	// watcher.Main()
 	//TODO: Jak na flagy? -> nefungují ani po kompilaci ani při go run main.go
 
 	//REDIS CONNECTION
