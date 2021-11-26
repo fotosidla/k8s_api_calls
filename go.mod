@@ -3,6 +3,7 @@ module github.com/fotosidla/k8s_api
 go 1.17
 
 require (
+	github.com/go-redis/redis v6.15.9+incompatible
 	k8s.io/api v0.22.3
 	k8s.io/apimachinery v0.22.3
 	k8s.io/client-go v0.22.3
@@ -11,7 +12,6 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logr/logr v0.4.0 // indirect
-	github.com/go-redis/redis v6.15.9+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.5 // indirect
