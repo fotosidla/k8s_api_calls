@@ -27,17 +27,19 @@ type demo struct {
 func main() {
 	ctx := context.Background()
 	events, err := connK8s().CoreV1().Events(v1.NamespaceAll).Watch(ctx, metav1.ListOptions{})
+	pods, err := connK8s().CoreV1().Pods(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
+
 	app := &app{
 		client: connK8s(),
 	}
+	test := app.getOwner(pods)
+	println(test.owner)
 	if err != nil {
 		panic(err)
 	}
 	resultChan := events.ResultChan()
 	app.processEvents(resultChan)
-	pods, err := connK8s().CoreV1().Pods("").List(ctx, metav1.ListOptions{})
-	app.getOwner(pods)
-	println(pods.Items)
+
 
 }
 
@@ -86,6 +88,7 @@ func (c *app) getOwner(pods *v1.PodList) *MallEvent {
 			if replicaERR != nil {
 				panic(replicaERR.Error())
 			}
+
 			return &MallEvent{
 				owner: replica.OwnerReferences[0].Name,
 				kind:  "Deployment",
