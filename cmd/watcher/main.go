@@ -18,6 +18,7 @@ import (
 type app struct {
 	client *kubernetes.Clientset
 	redis *redis.Client
+
 }
 
 
@@ -26,24 +27,28 @@ func main() {
 	events, err := connK8s().CoreV1().Events(v1.NamespaceAll).Watch(ctx, metav1.ListOptions{})
 
 
+
+
 	app := &app{
 		client: connK8s(),
 		redis: redisCon(),
 	}
-	
+
 
 	if err != nil {
 		panic(err)
 	}
 	resultChan := events.ResultChan()
-	app.processEvents(resultChan)
+	app.processEvents(resultChan,ctx)
 
 
 }
 
-func (c *app) processEvents(events <-chan watch.Event) {
+func (c *app) processEvents(events <-chan watch.Event,ctx context.Context) {
+
 	for event := range events {
-		mallEvent := c.mapEvent(event.Object.(*v1.Event))
+		mallEvent := c.mapEvent(event.Object.(*v1.Event),ctx)
+
 		if mallEvent == nil {
 			fmt.Println("Skipped processing of event.")
 			continue
@@ -52,28 +57,39 @@ func (c *app) processEvents(events <-chan watch.Event) {
 		c.storeEvent(mallEvent)
 
 
+
 	}
 }
 
 func (asdf *app) storeEvent(event *MallEvent) {
-	pods, err := connK8s().CoreV1().Pods(v1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
-	test := asdf.getOwner(pods)
+
+
+
+
+
 	//fmt.Println("Stored mall event.")
 	bytes, err := json.Marshal(MallEvent{
+
 		Name: event.Name,
 		Time: event.Time,
 		Reason: event.Reason,
 		Message: event.Message,
-		Owner: test.Owner,
-		Kind: test.Kind,
+
 	})
 	println(string(bytes),err)
 	// TODO store logic
+	//TODO redis store -> repSetOwn.Owner need to be gathered exactly for one event -> logic implementation
+
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
+
+
 type MallEvent struct {
-	Owner string `json:"owner"`
-	Kind  string `json:"kind"`
+	Owner string `json:"Owner"`
+	Kind string `json:"Kind"`
 	Name  string `json:"name"`
 	Time    string `json:"time"`
 	Reason  string `json:"reason"`
@@ -81,40 +97,9 @@ type MallEvent struct {
 	// TODO some other fields
 }
 
-func (c *app) getOwner(pods *v1.PodList) *MallEvent {
-
-	cAPP := c.client.AppsV1()
-	for _, pod := range pods.Items {
-		if len(pod.OwnerReferences) == 0 {
-			return nil
-
-		}
-
-		switch pod.OwnerReferences[0].Kind {
-		case "ReplicaSet":
-			replica, replicaERR := cAPP.ReplicaSets(pod.Namespace).Get(context.TODO(), pod.OwnerReferences[0].Name, metav1.GetOptions{})
-			if replicaERR != nil {
-				panic(replicaERR.Error())
-			}
-
-			return &MallEvent{
-				Owner: replica.OwnerReferences[0].Name,
-				Kind:  "Deployment",
-			}
-		case "DaemonSet", "StatefulSet":
-			return &MallEvent{
-				Owner: pod.OwnerReferences[0].Name,
-				Kind:  pod.OwnerReferences[0].Kind,
-			}
-		default:
-			continue
-		}
-	}
-	return nil
-	}
 
 
-func (c *app) mapEvent(event *v1.Event) *MallEvent {
+func (c *app) mapEvent(event *v1.Event, ctx context.Context) *MallEvent {
 
 	//fmt.Println("Mapping mall event.")
 
@@ -122,6 +107,32 @@ func (c *app) mapEvent(event *v1.Event) *MallEvent {
 	if event.Reason != "Scheduled" {
 		return nil
 	}
+	pod, err := c.client.CoreV1().Pods(event.InvolvedObject.Namespace).Get(ctx, event.InvolvedObject.Name, metav1.GetOptions{})
+	test := err.Error()
+	if test == "NotFound" {
+		println("POD NOT FOUND")
+	}
+	if  len(pod.ObjectMeta.OwnerReferences) > 1 {
+		panic("MORE REFERENCES THAN ONE")
+	}
+	if  len(pod.ObjectMeta.OwnerReferences) == 0 {
+		return nil
+	}
+
+	podRef := pod.ObjectMeta.OwnerReferences[0]
+	if podRef.Kind != "ReplicaSet"{
+		return nil
+	}
+	repSet, err := c.client.AppsV1().ReplicaSets(event.InvolvedObject.Namespace).Get(ctx, podRef.Name, metav1.GetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	if repSet.ObjectMeta.OwnerReferences[0].Kind != "Deployment" {
+		panic("Owner reference is not DEPLOYMENT")
+	}
+	fmt.Printf("POD NAME %s POD OWNER %s\n" ,pod.Name,repSet.ObjectMeta.OwnerReferences[0].Name)
+
+
 
 	return &MallEvent{
 		Name:    event.Name,
